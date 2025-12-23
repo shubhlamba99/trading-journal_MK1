@@ -19,7 +19,6 @@ COLUMNS = [
     "Exit_Date", "Spread_Exit_Price",
     "Short_Leg_Exit", "Long_Leg_Exit",
     "Short_Call_Exit", "Long_Call_Exit", "Short_Put_Exit", "Long_Put_Exit",
-    "Adjustment_Made", "Exit_Emotion", "Rule_Broken", "Rule_Broken_Which",
     # Calculated Fields
     "Days_in_Trade", "Multiplier", "Realized_PnL", "Win_Loss",
     "Return_on_Margin_%", "Yield_per_Trade", "Max_Profit",

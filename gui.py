@@ -80,7 +80,7 @@ class TradeJournalGUI:
         
         fields = [("Lots", "lots"), ("Width", "width"), ("Credit Received", "credit"), 
                   ("Max Loss", "max_loss"), ("Margin Used", "margin"), ("DTE Entry", "dte"),
-                  ("Spread Entry Price", "spread_price")]
+                  ("Spread Entry Price", "spread_price"), ("Sell Strike Delta", "sell_strike_delta")]
         
         self.entry_vars = {}
         for i, (label, key) in enumerate(fields):
@@ -165,6 +165,7 @@ class TradeJournalGUI:
                 "Margin_Used": float(self.entry_vars['margin'].get()),
                 "DTE_Entry": int(self.entry_vars['dte'].get()),
                 "Spread_Entry_Price": float(self.entry_vars['spread_price'].get()),
+                "Sell_Strike_Delta": float(self.entry_vars['sell_strike_delta'].get() or 0),
                 
                 "IV_Entry": float(self.entry_vars['iv'].get() or 0),
                 "IV_Percentile_Entry": float(self.entry_vars['iv_rank'].get() or 0),
@@ -340,28 +341,98 @@ class TradeJournalGUI:
             messagebox.showerror("Error", f"System Error: {e}")
 
     def setup_analytics_tab(self):
-        self.stats_text = tk.Text(self.tab_analytics, height=20, width=80)
-        self.stats_text.pack(pady=20, padx=20)
+        # Create a Frame for the Dashboard
+        self.dash_frame = ttk.Frame(self.tab_analytics)
+        self.dash_frame.pack(fill="both", expand=True)
+
+        # Canvas for background drawing
+        self.canvas = tk.Canvas(self.dash_frame, bg="#1e1e1e", highlightthickness=0)
+        self.canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        # Draw some stylized candlesticks in background
+        self.draw_background_candles()
+        self.canvas.bind("<Configure>", lambda e: self.draw_background_candles())
+
+        # Dashboard Content Container (Transparent-ish via placement)
+        # Using a Frame on top might block the canvas, so we place widgets directly or use a frame with care.
+        # Tkinter frames aren't transparent. We'll place widgets on the canvas or lift them.
+
+        # PnL Display
+        self.pnl_label = tk.Label(self.dash_frame, text="$0.00", font=("Helvetica", 48, "bold"), bg="#1e1e1e", fg="white")
+        self.pnl_label.place(relx=0.5, rely=0.3, anchor="center")
+
+        tk.Label(self.dash_frame, text="Cumulative PnL", font=("Helvetica", 14), bg="#1e1e1e", fg="#aaaaaa").place(relx=0.5, rely=0.4, anchor="center")
+
+        # Stats Text Area (made smaller and styled)
+        self.stats_text = tk.Text(self.dash_frame, height=12, width=60, bg="#2d2d2d", fg="white", relief="flat", font=("Consolas", 10))
+        self.stats_text.place(relx=0.5, rely=0.7, anchor="center")
+
+    def draw_background_candles(self):
+        self.canvas.delete("all")
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+
+        if w < 100: return # too small
+
+        # Draw some random looking candles for style
+        # Fixed pattern for "cool" look
+        import random
+        random.seed(42) # Consistent pattern
         
+        num_candles = 20
+        candle_width = w / num_candles
+
+        for i in range(num_candles):
+            x = i * candle_width + candle_width/2
+
+            # Randomize heights
+            open_y = random.randint(int(h*0.2), int(h*0.8))
+            close_y = random.randint(int(h*0.2), int(h*0.8))
+            high_y = min(open_y, close_y) - random.randint(10, 50)
+            low_y = max(open_y, close_y) + random.randint(10, 50)
+
+            color = "#2e2e2e" # Dark grey
+            if close_y < open_y: # Bullish (up)
+                color = "#3a3a3a" # Slightly lighter
+                outline = "#4a4a4a"
+            else: # Bearish
+                color = "#252525"
+                outline = "#353535"
+
+            # Wick
+            self.canvas.create_line(x, high_y, x, low_y, fill=outline, width=2)
+            # Body
+            self.canvas.create_rectangle(x - candle_width*0.3, open_y, x + candle_width*0.3, close_y, fill=color, outline=outline)
+
     def refresh_analytics(self):
         df_closed = data_manager.get_closed_trades()
         metrics = analytics.calculate_portfolio_metrics(df_closed)
         
-        text = f"PORTFOLIO ANALYTICS\n{'='*30}\n\n"
-        text += f"Total Closed Trades: {metrics['Total_Trades']}\n"
-        text += f"Cumulative PnL:      ${metrics['Cumulative_PnL']:.2f}\n"
-        text += f"Win Rate:            {metrics['Win_Rate']:.2f}%\n"
-        text += f"Expectancy:          ${metrics['Expectancy']:.2f}\n"
-        text += f"Max Drawdown:        ${metrics['Max_Drawdown']:.2f}\n"
-        text += f"Current Drawdown:    ${metrics['Drawdown']:.2f}\n\n"
-        
-        text += "Equity Curve (Last 10 trades):\n"
-        if metrics.get('Equity_Curve'):
-            curve = metrics['Equity_Curve'][-10:]
-            for val in curve:
-                text += f" -> ${val:.2f}\n"
+        # Update PnL
+        pnl = metrics['Cumulative_PnL']
+        self.pnl_label.config(text=f"${pnl:,.2f}")
+
+        if pnl >= 0:
+            self.pnl_label.config(fg="#00ff00") # Green
         else:
-            text += " No data.\n"
+            self.pnl_label.config(fg="#ff4444") # Red
+
+        # Update Stats Text
+        text = f"PORTFOLIO METRICS\n"
+        text += f"-----------------\n"
+        text += f"Trades:      {metrics['Total_Trades']}\n"
+        text += f"Win Rate:    {metrics['Win_Rate']:.1f}%\n"
+        text += f"Expectancy:  ${metrics['Expectancy']:.2f}\n"
+        text += f"Max DD:      ${metrics['Max_Drawdown']:.2f}\n"
+        text += f"Current DD:  ${metrics['Drawdown']:.2f}\n\n"
+        
+        text += "Recent Equity Curve:\n"
+        if metrics.get('Equity_Curve'):
+            curve = metrics['Equity_Curve'][-8:] # Last 8
+            curve_str = " -> ".join([f"${v:.0f}" for v in curve])
+            text += curve_str
+        else:
+            text += "No data."
         
         self.stats_text.delete(1.0, tk.END)
         self.stats_text.insert(tk.END, text)

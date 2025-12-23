@@ -12,6 +12,7 @@ COLUMNS = [
     "Spread_Entry_Price",
     "Short_Leg_Entry", "Long_Leg_Entry",
     "Short_Call_Entry", "Long_Call_Entry", "Short_Put_Entry", "Long_Put_Entry",
+    "Sell_Strike_Delta",
     "IV_Entry", "IV_Percentile_Entry", "IV_HV_Percent", "VIX_Entry",
     "Planned_Exit_Percent", "Entry_Confidence",
     # Exit Fields

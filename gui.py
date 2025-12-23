@@ -15,6 +15,25 @@ class TradeJournalGUI:
         style = ttk.Style()
         style.theme_use('clam')
         
+        # Modern Professional Theme
+        bg_color = "#F5F6F7" # Light grey / off-white
+        fg_color = "#333333" # Dark grey text
+
+        style.configure(".", background=bg_color, foreground=fg_color, font=("Segoe UI", 10))
+        style.configure("TLabel", background=bg_color, padding=2)
+        style.configure("TButton", padding=6)
+        style.configure("TEntry", padding=4)
+        style.configure("TNotebook", background=bg_color)
+        style.configure("TNotebook.Tab", padding=(10, 5))
+        style.configure("TLabelframe", background=bg_color)
+        style.configure("TLabelframe.Label", background=bg_color, font=("Segoe UI", 10, "bold"))
+
+        # Specific Styles for cues
+        style.configure("Green.TLabel", foreground="#2E7D32", font=("Segoe UI", 10, "bold"))
+        style.configure("Red.TLabel", foreground="#C62828", font=("Segoe UI", 10, "bold"))
+
+        self.root.configure(bg=bg_color)
+
         # Tabs
         self.tab_control = ttk.Notebook(root)
         
@@ -75,8 +94,8 @@ class TradeJournalGUI:
         self.direction.grid(row=1, column=3)
         
         # --- Structure & Risk ---
-        risk_frame = ttk.LabelFrame(frame, text="Structure & Risk", padding="5")
-        risk_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        risk_frame = ttk.LabelFrame(frame, text="Structure & Risk", padding="10")
+        risk_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=10)
         
         fields = [("Lots", "lots"), ("Width", "width"), ("Credit Received", "credit"), 
                   ("Max Loss", "max_loss"), ("Margin Used", "margin"), ("DTE Entry", "dte"),
@@ -85,9 +104,17 @@ class TradeJournalGUI:
         self.entry_vars = {}
         for i, (label, key) in enumerate(fields):
             r, c = divmod(i, 4)
-            ttk.Label(risk_frame, text=f"{label}:").grid(row=r*2, column=c, sticky="w")
+
+            # Apply color cues
+            style_name = "TLabel"
+            if label == "Credit Received":
+                style_name = "Green.TLabel"
+            elif label == "Max Loss":
+                style_name = "Red.TLabel"
+
+            ttk.Label(risk_frame, text=f"{label}:", style=style_name).grid(row=r*2, column=c, sticky="w", pady=(5, 0))
             var = ttk.Entry(risk_frame)
-            var.grid(row=r*2+1, column=c, padx=5)
+            var.grid(row=r*2+1, column=c, padx=5, pady=(0, 5))
             self.entry_vars[key] = var
 
         # --- Legs (Dynamic) ---
@@ -233,23 +260,6 @@ class TradeJournalGUI:
         self.exit_legs_frame.grid(row=1, column=0, columnspan=4, pady=10)
         self.exit_leg_widgets = {}
         
-        # Discipline
-        ttk.Label(self.exit_frame, text="Adjustment:").grid(row=2, column=0)
-        self.adj = ttk.Combobox(self.exit_frame, values=["None", "Roll", "Hedge"])
-        self.adj.grid(row=2, column=1)
-        
-        ttk.Label(self.exit_frame, text="Emotion:").grid(row=2, column=2)
-        self.emo = ttk.Combobox(self.exit_frame, values=["Calm", "Fear", "Greed"])
-        self.emo.grid(row=2, column=3)
-        
-        ttk.Label(self.exit_frame, text="Rule Broken?").grid(row=3, column=0)
-        self.rule = ttk.Combobox(self.exit_frame, values=["No", "Yes"])
-        self.rule.grid(row=3, column=1)
-        
-        ttk.Label(self.exit_frame, text="Which Rule?").grid(row=3, column=2)
-        self.rule_which = ttk.Entry(self.exit_frame)
-        self.rule_which.grid(row=3, column=3)
-        
         self.btn_close = ttk.Button(self.exit_frame, text="CLOSE TRADE", command=self.close_trade, state="disabled")
         self.btn_close.grid(row=4, column=0, columnspan=4, pady=20)
 
@@ -311,11 +321,7 @@ class TradeJournalGUI:
             # Gather Exit Data
             exit_data = {
                 "Exit_Date": self.exit_date.get(),
-                "Spread_Exit_Price": float(self.exit_price.get()),
-                "Adjustment_Made": self.adj.get(),
-                "Exit_Emotion": self.emo.get(),
-                "Rule_Broken": self.rule.get(),
-                "Rule_Broken_Which": self.rule_which.get()
+                "Spread_Exit_Price": float(self.exit_price.get())
             }
             
             for key, widget in self.exit_leg_widgets.items():
@@ -341,68 +347,36 @@ class TradeJournalGUI:
             messagebox.showerror("Error", f"System Error: {e}")
 
     def setup_analytics_tab(self):
-        # Create a Frame for the Dashboard
-        self.dash_frame = ttk.Frame(self.tab_analytics)
+        # Clean Dashboard Container
+        self.dash_frame = ttk.Frame(self.tab_analytics, padding="20")
         self.dash_frame.pack(fill="both", expand=True)
 
-        # Canvas for background drawing
-        self.canvas = tk.Canvas(self.dash_frame, bg="#1e1e1e", highlightthickness=0)
-        self.canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
+        # Header Section: Cumulative PnL
+        # Using a Frame to center content
+        header_frame = ttk.Frame(self.dash_frame)
+        header_frame.pack(pady=40)
 
-        # Draw some stylized candlesticks in background
-        self.draw_background_candles()
-        self.canvas.bind("<Configure>", lambda e: self.draw_background_candles())
+        ttk.Label(header_frame, text="Cumulative PnL", font=("Segoe UI", 12)).pack()
+        self.pnl_label = tk.Label(header_frame, text="$0.00", font=("Segoe UI", 48, "bold"), bg="#F5F6F7", fg="#333333")
+        self.pnl_label.pack(pady=10)
 
-        # Dashboard Content Container (Transparent-ish via placement)
-        # Using a Frame on top might block the canvas, so we place widgets directly or use a frame with care.
-        # Tkinter frames aren't transparent. We'll place widgets on the canvas or lift them.
+        # Metrics Grid
+        metrics_frame = ttk.LabelFrame(self.dash_frame, text="Performance Metrics", padding="15")
+        metrics_frame.pack(fill="x", pady=20, padx=50)
 
-        # PnL Display
-        self.pnl_label = tk.Label(self.dash_frame, text="$0.00", font=("Helvetica", 48, "bold"), bg="#1e1e1e", fg="white")
-        self.pnl_label.place(relx=0.5, rely=0.3, anchor="center")
+        # We will populate these in refresh_analytics
+        self.metric_labels = {}
+        metrics_keys = ["Total Trades", "Win Rate", "Expectancy", "Max Drawdown"]
 
-        tk.Label(self.dash_frame, text="Cumulative PnL", font=("Helvetica", 14), bg="#1e1e1e", fg="#aaaaaa").place(relx=0.5, rely=0.4, anchor="center")
+        for i, key in enumerate(metrics_keys):
+            f = ttk.Frame(metrics_frame)
+            f.grid(row=0, column=i, weight=1, padx=10)
+            ttk.Label(f, text=key, font=("Segoe UI", 10)).pack()
+            l = ttk.Label(f, text="-", font=("Segoe UI", 16, "bold"))
+            l.pack()
+            self.metric_labels[key] = l
 
-        # Stats Text Area (made smaller and styled)
-        self.stats_text = tk.Text(self.dash_frame, height=12, width=60, bg="#2d2d2d", fg="white", relief="flat", font=("Consolas", 10))
-        self.stats_text.place(relx=0.5, rely=0.7, anchor="center")
-
-    def draw_background_candles(self):
-        self.canvas.delete("all")
-        w = self.canvas.winfo_width()
-        h = self.canvas.winfo_height()
-
-        if w < 100: return # too small
-
-        # Draw some random looking candles for style
-        # Fixed pattern for "cool" look
-        import random
-        random.seed(42) # Consistent pattern
-        
-        num_candles = 20
-        candle_width = w / num_candles
-
-        for i in range(num_candles):
-            x = i * candle_width + candle_width/2
-
-            # Randomize heights
-            open_y = random.randint(int(h*0.2), int(h*0.8))
-            close_y = random.randint(int(h*0.2), int(h*0.8))
-            high_y = min(open_y, close_y) - random.randint(10, 50)
-            low_y = max(open_y, close_y) + random.randint(10, 50)
-
-            color = "#2e2e2e" # Dark grey
-            if close_y < open_y: # Bullish (up)
-                color = "#3a3a3a" # Slightly lighter
-                outline = "#4a4a4a"
-            else: # Bearish
-                color = "#252525"
-                outline = "#353535"
-
-            # Wick
-            self.canvas.create_line(x, high_y, x, low_y, fill=outline, width=2)
-            # Body
-            self.canvas.create_rectangle(x - candle_width*0.3, open_y, x + candle_width*0.3, close_y, fill=color, outline=outline)
+        metrics_frame.columnconfigure(tuple(range(len(metrics_keys))), weight=1)
 
     def refresh_analytics(self):
         df_closed = data_manager.get_closed_trades()
@@ -413,29 +387,15 @@ class TradeJournalGUI:
         self.pnl_label.config(text=f"${pnl:,.2f}")
 
         if pnl >= 0:
-            self.pnl_label.config(fg="#00ff00") # Green
+            self.pnl_label.config(fg="#2E7D32") # Green
         else:
-            self.pnl_label.config(fg="#ff4444") # Red
+            self.pnl_label.config(fg="#C62828") # Red
 
-        # Update Stats Text
-        text = f"PORTFOLIO METRICS\n"
-        text += f"-----------------\n"
-        text += f"Trades:      {metrics['Total_Trades']}\n"
-        text += f"Win Rate:    {metrics['Win_Rate']:.1f}%\n"
-        text += f"Expectancy:  ${metrics['Expectancy']:.2f}\n"
-        text += f"Max DD:      ${metrics['Max_Drawdown']:.2f}\n"
-        text += f"Current DD:  ${metrics['Drawdown']:.2f}\n\n"
-        
-        text += "Recent Equity Curve:\n"
-        if metrics.get('Equity_Curve'):
-            curve = metrics['Equity_Curve'][-8:] # Last 8
-            curve_str = " -> ".join([f"${v:.0f}" for v in curve])
-            text += curve_str
-        else:
-            text += "No data."
-        
-        self.stats_text.delete(1.0, tk.END)
-        self.stats_text.insert(tk.END, text)
+        # Update Grid Metrics
+        self.metric_labels["Total Trades"].config(text=str(metrics['Total_Trades']))
+        self.metric_labels["Win Rate"].config(text=f"{metrics['Win_Rate']:.1f}%")
+        self.metric_labels["Expectancy"].config(text=f"${metrics['Expectancy']:.2f}")
+        self.metric_labels["Max Drawdown"].config(text=f"${metrics['Max_Drawdown']:.2f}")
 
 if __name__ == "__main__":
     data_manager.initialize_db()
